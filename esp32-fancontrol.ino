@@ -3,6 +3,8 @@
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 
+#include <driver/pcnt.h>
+
 typedef uint32_t PortType; // Formerly 'RwReg' but interfered w/CMCIS header
 
 const char* ssid = "YOUR_SSID";
@@ -72,6 +74,24 @@ void IRAM_ATTR countPulse() {
 
 void notFound(AsyncWebServerRequest *request) {
     request->send(404, "text/plain", "Not found");
+}
+
+void setup_pcnt() {
+  pcnt_unit_t pcnt_unit;
+
+    // Configure channel 0
+    pcnt_config_t dev_config = {
+        .pulse_gpio_num = config->phase_a_gpio_num,
+        .ctrl_gpio_num = config->phase_b_gpio_num,
+        .channel = PCNT_CHANNEL_0,
+        .unit = ec11->pcnt_unit,
+        .pos_mode = PCNT_COUNT_DEC,
+        .neg_mode = PCNT_COUNT_INC,
+        .lctrl_mode = PCNT_MODE_REVERSE,
+        .hctrl_mode = PCNT_MODE_KEEP,
+        .counter_h_lim = EC11_PCNT_DEFAULT_HIGH_LIMIT,
+        .counter_l_lim = EC11_PCNT_DEFAULT_LOW_LIMIT,
+    };
 }
 
 void setup(){
