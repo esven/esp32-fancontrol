@@ -66,14 +66,16 @@ void notFound(AsyncWebServerRequest *request) {
 void IRAM_ATTR pcnt_overflow_handler(void *arg)
 {
     portENTER_CRITICAL_ISR(&mux);
-    if (pinstate == 0) {
-      *outsetreg = pinmask;
-      pinstate = 1;
-    } else {
-      *outclrreg = pinmask;
-      pinstate = 0;
-    }
-    pulses += HALL_PCNT_DEFAULT_HIGH_LIMIT;
+    if ((uint32_t)(*inreg & inpinmask) == 0) {
+      if (pinstate == 0) {
+        *outsetreg = pinmask;
+        pinstate = 1;
+      } else {
+        *outclrreg = pinmask;
+        pinstate = 0;
+      }
+      pulses += HALL_PCNT_DEFAULT_HIGH_LIMIT;
+      }
     portEXIT_CRITICAL_ISR(&mux);
 }
 
@@ -116,6 +118,11 @@ void setup(){
   digitalWrite(27, LOW);
   outsetreg = &GPIO.out_w1ts;
   outclrreg = &GPIO.out_w1tc;
+  if (reedPin < 32) {
+    inreg = &GPIO.in;
+  } else {
+    inreg = &GPIO.in1.val;
+  }
   
   pinmask = digitalPinToBitMask(27);
   inpinmask = digitalPinToBitMask(reedPin);
