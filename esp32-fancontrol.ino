@@ -14,6 +14,9 @@ const char* password =  "YOUR_PWD";
 const int ledPin = 32;  // 16 corresponds to GPIO16
 const int reedPin = 33;
 
+#define HALL_PCNT_DEFAULT_HIGH_LIMIT (100)
+pcnt_unit_t pcnt_unit = PCNT_UNIT_0;
+
 // setting PWM properties
 const int freq = 600;
 const int ledChannel = 0;
@@ -56,9 +59,12 @@ const String PAGE_FOOTER = F("<p><a href=\"/fan/up\"><button class=\"button\">UP
     "<p><a href=\"/fan/down\"><button class=\"button button2\">DOWN</button></a></p>\r\n" \
     "</body></html>\r\n");
 
-void IRAM_ATTR countPulse() {
-  // just count each pulse (only if hall is low
-  //if (!(*inreg & inpinmask)) {
+void notFound(AsyncWebServerRequest *request) {
+    request->send(404, "text/plain", "Not found");
+}
+
+void IRAM_ATTR pcnt_overflow_handler(void *arg)
+{
     portENTER_CRITICAL_ISR(&mux);
     if (pinstate == 0) {
       *outsetreg = pinmask;
@@ -67,46 +73,49 @@ void IRAM_ATTR countPulse() {
       *outclrreg = pinmask;
       pinstate = 0;
     }
-      pulses++;
-      portEXIT_CRITICAL_ISR(&mux);
- // }
-}
-
-void notFound(AsyncWebServerRequest *request) {
-    request->send(404, "text/plain", "Not found");
+    pulses += HALL_PCNT_DEFAULT_HIGH_LIMIT;
+    portEXIT_CRITICAL_ISR(&mux);
 }
 
 void setup_pcnt() {
-  pcnt_unit_t pcnt_unit;
 
     // Configure channel 0
-    pcnt_config_t dev_config = {
-        .pulse_gpio_num = config->phase_a_gpio_num,
-        .ctrl_gpio_num = config->phase_b_gpio_num,
-        .channel = PCNT_CHANNEL_0,
-        .unit = ec11->pcnt_unit,
-        .pos_mode = PCNT_COUNT_DEC,
-        .neg_mode = PCNT_COUNT_INC,
-        .lctrl_mode = PCNT_MODE_REVERSE,
-        .hctrl_mode = PCNT_MODE_KEEP,
-        .counter_h_lim = EC11_PCNT_DEFAULT_HIGH_LIMIT,
-        .counter_l_lim = EC11_PCNT_DEFAULT_LOW_LIMIT,
-    };
+    pcnt_config_t dev_config = {};
+    dev_config.pulse_gpio_num = reedPin;
+    dev_config.ctrl_gpio_num = PCNT_PIN_NOT_USED;
+    dev_config.channel = PCNT_CHANNEL_0;
+    dev_config.unit = pcnt_unit;
+    dev_config.pos_mode = PCNT_COUNT_DIS;
+    dev_config.neg_mode = PCNT_COUNT_INC;
+    dev_config.lctrl_mode = PCNT_MODE_KEEP;
+    dev_config.hctrl_mode = PCNT_MODE_KEEP;
+    dev_config.counter_h_lim = HALL_PCNT_DEFAULT_HIGH_LIMIT;
+
+    if (pcnt_unit_config(&dev_config) == ESP_OK) {
+    
+      // PCNT pause and reset value
+      pcnt_counter_pause(pcnt_unit);
+      pcnt_counter_clear(pcnt_unit);
+    
+      if (pcnt_isr_service_install(0) == ESP_OK) {
+        pcnt_isr_handler_add(pcnt_unit, pcnt_overflow_handler, NULL);
+        pcnt_event_enable(pcnt_unit, PCNT_EVT_H_LIM);
+
+        // Filter glitches shorter than 1023 APB_CLOCK cycles
+        pcnt_set_filter_value(pcnt_unit, 1023);
+        pcnt_filter_enable(pcnt_unit);
+        pcnt_counter_resume(pcnt_unit);
+      }
+    }
 }
 
 void setup(){
 
   pinMode(reedPin,INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(reedPin), countPulse, FALLING); 
   pinMode(27,OUTPUT);
   digitalWrite(27, LOW);
   outsetreg = &GPIO.out_w1ts;
   outclrreg = &GPIO.out_w1tc;
-  if (reedPin < 32) {
-    inreg = &GPIO.in;
-  } else {
-    inreg = &GPIO.in1.val;
-  }
   
   pinmask = digitalPinToBitMask(27);
   inpinmask = digitalPinToBitMask(reedPin);
