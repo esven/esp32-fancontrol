@@ -14,11 +14,11 @@ const char* password =  "YOUR_PWD";
 const int ledPin = 32;  // 16 corresponds to GPIO16
 const int reedPin = 33;
 
-#define HALL_PCNT_DEFAULT_HIGH_LIMIT (100)
+#define HALL_PCNT_DEFAULT_HIGH_LIMIT (1)
 pcnt_unit_t pcnt_unit = PCNT_UNIT_0;
 
 // setting PWM properties
-const int freq = 600;
+const int freq = 5000;
 const int ledChannel = 0;
 const int resolution = 10;
 int dutyCycle = 0;
@@ -125,6 +125,7 @@ void setup(){
   
   // attach the channel to the GPIO to be controlled
   ledcAttachPin(ledPin, ledChannel);
+  setup_pcnt();
 
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
